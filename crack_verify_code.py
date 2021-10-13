@@ -12,13 +12,14 @@
 __author__ = 'Cyrus_Ren'
 
 from PIL import Image
-# import tesserocr
+import pytesseract
 import re
-from GetConfig import config
+from get_config import config
 from urllib.parse import quote_plus, urlencode
-from GetConfig import config
+from bs4 import BeautifulSoup
 
-HEADER = config.crawl_headers
+CRACK_CODE_URL = 'https://kns.cnki.net/KNS8/Brief/CheckCode'
+CRACK_CODE_PATH = 'data/crack_code.jpeg'
 
 
 class CrackCode(object):
@@ -26,20 +27,21 @@ class CrackCode(object):
         '''
         获取验证码图片
         '''
-        self.header = HEADER
+        self.header = config.crawl_common_headers
         self.session = session
+        self.re_current_url = re.search(r'.net(.*)', current_url).group(1)
+
         # 获得验证码图片地址
-        imgurl_pattern_compile = re.compile(r'.*?<img src="(.*?)".*?')
-        img_url = re.search(imgurl_pattern_compile, page_source).group(1)
-        self.current_url = re.search(r'(.*?)#', current_url).group(1)
-        self.re_current_url = re.search(r'.net(.*)', self.current_url).group(1)
+        soup = BeautifulSoup(page_source.text, 'lxml')
+        img_url = soup.find('img')['src']
+
         # 下载图片
-        img_url = 'http://kns.cnki.net' + img_url
+        img_url = 'https://kns.cnki.net' + img_url
         image_res = self.session.get(img_url, headers=self.header)
-        with open('data/crack_code.jpeg', 'wb') as file:
+        with open(CRACK_CODE_PATH, 'wb') as file:
             file.write(image_res.content)
         # 是否自动识别
-        if config.crawl_iscrackcode == 1:
+        if config.crawl_is_crack_code == '1':
             return self.crack_code()
         else:
             return self.handle_code()
@@ -48,7 +50,7 @@ class CrackCode(object):
         '''
         自动识别验证码
         '''
-        image = Image.open('data/crack_code.jpeg')
+        image = Image.open(CRACK_CODE_PATH)
         # 转为灰度图像
         image = image.convert('L')
         # 设定二值化阈值
@@ -59,15 +61,16 @@ class CrackCode(object):
                 table.append(0)
             else:
                 table.append(1)
-        iamge = image.point(table, '1')
-        # result = tesserocr.image_to_text(image)
-        # print(result)
+        image = image.point(table, '1')
+        code = pytesseract.image_to_text(image)
+        print('验证码识别：' + code)
+        return self.send_code(code)
 
     def handle_code(self):
         '''
         手动识别验证码
         '''
-        image = Image.open('crack_code.jpeg')
+        image = Image.open(CRACK_CODE_PATH)
         image.show()
         code = input('出现验证码，请手动输入：')
         return self.send_code(code)
@@ -81,10 +84,25 @@ class CrackCode(object):
         re_url = re.sub(r'%2F', '%2f', re_url)
         re_url = re.sub(r'%3F', '%3f', re_url)
         re_url = re.sub(r'%3D', '%3d', re_url)
-        send_url = 'http://kns.cnki.net/kns/brief/vericode.aspx?rurl=' + re_url + '&vericode=' + code
-        self.header['Referer'] = send_url
-        self.header['Upgrade-Insecure-Requests'] = '1'
-        return self.session.get(send_url, headers=self.header).text
+
+        headers = {
+            'Accept': '*/*',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'Host': 'kns.cnki.net',
+            'Origin': 'https://kns.cnki.net',
+            'Referer': 'https://kns.cnki.net/KNS8/AdvSearch?dbcode=CDMD',
+            'X-Requested-With': 'XMLHttpRequest',
+        }
+
+        headers = {**headers, **config.crawl_common_headers}
+
+        post_data = {
+            'vericode': code,
+        }
+
+        res = self.session.post(
+            CRACK_CODE_URL, data=post_data, headers=headers)
+        return res
 
 
 crack = CrackCode()

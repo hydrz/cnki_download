@@ -36,7 +36,7 @@ pip install -r requirements.txt
 
 
 ```shell
-# Config.ini 为项目配置文件
+# config.ini 为项目配置文件
 # 0为关闭 1为开启
 isDownloadFile = 1     # 是否下载文件
 isCrackCode=0          # 是否自动识别验证码
