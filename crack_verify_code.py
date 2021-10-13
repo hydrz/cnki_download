@@ -51,18 +51,20 @@ class CrackCode(object):
         自动识别验证码
         '''
         image = Image.open(CRACK_CODE_PATH)
-        # 转为灰度图像
+        # 进行置灰处理
         image = image.convert('L')
-        # 设定二值化阈值
-        threshold = 127
+        # 这个是二值化阈值
+        threshold = 150
         table = []
         for i in range(256):
             if i < threshold:
                 table.append(0)
             else:
                 table.append(1)
-        image = image.point(table, '1')
-        code = pytesseract.image_to_text(image)
+        # 通过表格转换成二进制图片，1的作用是白色，0就是黑色
+        image = image.point(table, "1")
+
+        code = pytesseract.image_to_string(image).lower().replace(' ', '')
         print('验证码识别：' + code)
         return self.send_code(code)
 
